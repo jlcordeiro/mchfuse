@@ -326,7 +326,7 @@ func (f *File) Create(name string) (*File, error) {
 	return f.device.fileByID(newID, &File{})
 }
 
-func (f *File) FlushCache() error {
+func (f *File) FlushCache(file_complete bool) error {
 	if f.cache.Length() == 0 {
 		// nothing cached left to write
 		return nil
@@ -338,7 +338,7 @@ func (f *File) FlushCache() error {
 		bytes.NewBuffer(f.cache.Content()),
 		func(req *http.Request) {
 			q := req.URL.Query()
-			q.Add("done", "true")
+			q.Add("done", strconv.FormatBool(file_complete))
 			q.Add("offset", strconv.FormatInt(f.cache.Offset(), 10))
 			req.URL.RawQuery = q.Encode()
 		},
@@ -365,7 +365,7 @@ func (f *File) FlushCache() error {
 
 func (f *File) Flush() error {
 	if f.cache != nil {
-		return f.FlushCache()
+		return f.FlushCache(true)
 	}
 
 	return nil
@@ -382,7 +382,7 @@ func (f *File) Write(data []byte, offset int64) error {
 	f.cache.Add(data, offset)
 
 	if f.cache.Full() == true {
-		return f.FlushCache()
+		return f.FlushCache(false)
 	}
 
 	return nil
