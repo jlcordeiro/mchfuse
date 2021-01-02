@@ -59,3 +59,11 @@ func (mf *MCHFileHandle) Write(ctx context.Context, data []byte, off int64) (wri
 
 	return uint32(len(data)), fs.OK
 }
+
+func (mf *MCHFileHandle) Flush(ctx context.Context) syscall.Errno {
+	if mf.node.file.Flush() != nil {
+		return syscall.EIO
+	}
+
+	return fs.OK
+}

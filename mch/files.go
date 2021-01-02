@@ -44,6 +44,7 @@ type File struct {
 	CTime      ISOTime `json:"cTime"`
 	client     *Client
 	device     *Device
+	cache      *CacheFile
 }
 
 type FileList struct {
@@ -325,15 +326,20 @@ func (f *File) Create(name string) (*File, error) {
 	return f.device.fileByID(newID, &File{})
 }
 
-func (f *File) Write(data []byte, offset int64) error {
+func (f *File) FlushCache() error {
+	if f.cache.Length() == 0 {
+		// nothing cached left to write
+		return nil
+	}
+
 	resp, err := f.device.api(
 		"POST",
 		fmt.Sprintf("/v2/files/%s/resumable", f.ID),
-		bytes.NewBuffer(data),
+		bytes.NewBuffer(f.cache.Content()),
 		func(req *http.Request) {
 			q := req.URL.Query()
 			q.Add("done", "true")
-			q.Add("offset", strconv.FormatInt(offset, 10))
+			q.Add("offset", strconv.FormatInt(f.cache.Offset(), 10))
 			req.URL.RawQuery = q.Encode()
 		},
 	)
@@ -351,6 +357,32 @@ func (f *File) Write(data []byte, offset int64) error {
 			resp.Request.URL,
 			ErrorUnexpectedStatusCode,
 		)
+	}
+
+	f.cache.Reset()
+	return nil
+}
+
+func (f *File) Flush() error {
+	if f.cache != nil {
+		return f.FlushCache()
+	}
+
+	return nil
+}
+
+func (f *File) Write(data []byte, offset int64) error {
+	// concurrent write operations to the same File arrive sequentially.
+	// a mutex will lock the second write from starting until the first ends.
+	// e.g. 2 writes to the same file, 1 write + 1 delete, etc
+	if f.cache == nil {
+		f.cache = new(CacheFile)
+	}
+
+	f.cache.Add(data, offset)
+
+	if f.cache.Full() == true {
+		return f.FlushCache()
 	}
 
 	return nil
