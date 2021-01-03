@@ -101,13 +101,18 @@ func (f *File) LookupDirectory(name string) (*File, error) {
 	return child, nil
 }
 
-func (f *File) Refresh() error {
+func (f *File) FileExists() bool {
 	_, err := f.device.fileByID(f.ID, f)
-	if err != nil {
-		return err
+	if err == nil {
+		return true
 	}
 
-	return nil
+	_, err = f.device.resumableFileByID(f.ID, f)
+	if err == nil {
+		return true
+	}
+
+	return false
 }
 
 func (f *File) Delete() error {
@@ -301,7 +306,6 @@ func (f *File) Create(name string) (*File, error) {
 			multipartBody.AddContentType(req)
 
 			q := req.URL.Query()
-			q.Add("done", "true")
 			req.URL.RawQuery = q.Encode()
 		},
 	)
@@ -325,13 +329,13 @@ func (f *File) Create(name string) (*File, error) {
 	location := resp.Header.Get("Location")
 	newID := path.Base(location)
 
-	return f.device.fileByID(newID, &File{})
+	return f.device.resumableFileByID(newID, &File{})
 }
 
 func (f *File) postResumable(data []byte, offset int64, file_complete bool) error {
 	resp, err := f.device.api(
-		"POST",
-		fmt.Sprintf("/v2/files/%s/resumable", f.ID),
+		"PUT",
+		fmt.Sprintf("/v2/files/%s/resumable/content", f.ID),
 		bytes.NewBuffer(data),
 		func(req *http.Request) {
 			q := req.URL.Query()
@@ -346,7 +350,7 @@ func (f *File) postResumable(data []byte, offset int64, file_complete bool) erro
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf(
 			"status code %v writing file %v at %v: %w",
 			resp.StatusCode,

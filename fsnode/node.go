@@ -178,7 +178,7 @@ func (mn *MCHNode) updateChild(ctx context.Context, name string, info *mch.File)
 }
 
 func (mn *MCHNode) Getattr(ctx context.Context, file fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
-	if err := mn.file.Refresh(); err != nil {
+	if mn.file.FileExists() == false {
 		return syscall.EIO
 	}
 

@@ -270,10 +270,10 @@ func (d *Device) fileSearchParentAndName(parentID string, name string) (*File, e
 	return &child, nil
 }
 
-func (d *Device) fileByID(id string, file *File) (*File, error) {
+func (d *Device) getFile(id string, file *File, path_format string) (*File, error) {
 	resp, err := d.api(
 		"GET",
-		fmt.Sprintf("/v2/files/%s", id),
+		fmt.Sprintf(path_format, id),
 		nil,
 		func(req *http.Request) {
 			q := req.URL.Query()
@@ -310,6 +310,14 @@ func (d *Device) fileByID(id string, file *File) (*File, error) {
 	file.device = d
 
 	return file, nil
+}
+
+func (d *Device) fileByID(id string, file *File) (*File, error) {
+	return d.getFile(id, file, "/v2/files/%s")
+}
+
+func (d *Device) resumableFileByID(id string, file *File) (*File, error) {
+	return d.getFile(id, file, "/v2/files/%s/resumable")
 }
 
 func (d *Device) Root() (*File, error) {
