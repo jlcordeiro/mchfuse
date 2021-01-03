@@ -25,6 +25,8 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+
+	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
 const DirectoryMimeType = "application/x.wd.dir"
@@ -326,20 +328,15 @@ func (f *File) Create(name string) (*File, error) {
 	return f.device.fileByID(newID, &File{})
 }
 
-func (f *File) FlushCache(file_complete bool) error {
-	if f.cache.Length() == 0 {
-		// nothing cached left to write
-		return nil
-	}
-
+func (f *File) postResumable(data []byte, offset int64, file_complete bool) error {
 	resp, err := f.device.api(
 		"POST",
 		fmt.Sprintf("/v2/files/%s/resumable", f.ID),
-		bytes.NewBuffer(f.cache.Content()),
+		bytes.NewBuffer(data),
 		func(req *http.Request) {
 			q := req.URL.Query()
 			q.Add("done", strconv.FormatBool(file_complete))
-			q.Add("offset", strconv.FormatInt(f.cache.Offset(), 10))
+			q.Add("offset", strconv.FormatInt(offset, 10))
 			req.URL.RawQuery = q.Encode()
 		},
 	)
@@ -359,22 +356,29 @@ func (f *File) FlushCache(file_complete bool) error {
 		)
 	}
 
-	f.cache.Reset()
 	return nil
 }
 
-func (f *File) Flush() error {
-	if f.cache != nil {
-		return f.FlushCache(true)
+func (f *File) FlushCache(file_complete bool) error {
+	if f.cache == nil || f.cache.Length() == 0 {
+		// nothing cached left to write
+		return nil
 	}
 
-	return nil
+	defer f.cache.Reset()
+	return f.postResumable(f.cache.Content(), f.cache.Offset(), file_complete)
 }
 
+// concurrent write operations to the same File arrive sequentially.
+// a mutex will lock the second write from starting until the first ends.
+// e.g. 2 writes to the same file, 1 write + 1 delete, etc
 func (f *File) Write(data []byte, offset int64) error {
-	// concurrent write operations to the same File arrive sequentially.
-	// a mutex will lock the second write from starting until the first ends.
-	// e.g. 2 writes to the same file, 1 write + 1 delete, etc
+	skip_cache := f.cache == nil && len(data) < fuse.MAX_KERNEL_WRITE
+	if skip_cache {
+		return f.postResumable(data, offset, true)
+	}
+
+	// if we get here the file was big enough not to fit into one fuse op
 	if f.cache == nil {
 		f.cache = new(CacheFile)
 	}

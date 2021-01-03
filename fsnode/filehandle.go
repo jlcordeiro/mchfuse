@@ -61,7 +61,7 @@ func (mf *MCHFileHandle) Write(ctx context.Context, data []byte, off int64) (wri
 }
 
 func (mf *MCHFileHandle) Flush(ctx context.Context) syscall.Errno {
-	if mf.node.file.Flush() != nil {
+	if mf.node.file.FlushCache(true) != nil {
 		return syscall.EIO
 	}
 

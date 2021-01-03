@@ -1,2 +1,0 @@
-* Skip cache for small files
-* Cleanup creation of cache (checks if nil every write)
