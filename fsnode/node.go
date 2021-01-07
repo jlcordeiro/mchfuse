@@ -32,7 +32,8 @@ import (
 
 type MCHNode struct {
 	fs.Inode
-	file *mch.File
+	file  *mch.File
+	flags uint32
 }
 
 var _ = (fs.InodeEmbedder)((*MCHNode)(nil))
@@ -53,7 +54,7 @@ var _ = (fs.NodeMknoder)((*MCHNode)(nil))
 var ErrorInvalidFilesystemStatus = errors.New("invalid filesytem status")
 
 func NewMCHNode(file *mch.File) *MCHNode {
-	return &MCHNode{file: file}
+	return &MCHNode{file: file, flags: 0}
 }
 
 func (mn *MCHNode) mode() uint32 {
@@ -209,6 +210,11 @@ func (mn *MCHNode) Setxattr(ctx context.Context, attr string, dest []byte, flags
 }
 
 func (mn *MCHNode) Open(ctx context.Context, flags uint32) (file fs.FileHandle, fuseFlags uint32, code syscall.Errno) {
+	if mn.file.FileExists() == false {
+		return nil, 0, syscall.EIO
+	}
+
+	mn.flags = flags
 	return &MCHFileHandle{node: mn}, 0, fs.OK
 }
 

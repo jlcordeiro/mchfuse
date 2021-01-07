@@ -332,10 +332,17 @@ func (f *File) Create(name string) (*File, error) {
 	return f.device.resumableFileByID(newID, &File{})
 }
 
-func (f *File) postResumable(data []byte, offset int64, file_complete bool) error {
+func (f *File) upload(
+	method string,
+	path_format string,
+	expected_http_code int,
+	data []byte,
+	offset int64,
+	file_complete bool,
+) error {
 	resp, err := f.device.api(
-		"PUT",
-		fmt.Sprintf("/v2/files/%s/resumable/content", f.ID),
+		method,
+		fmt.Sprintf(path_format, f.ID),
 		bytes.NewBuffer(data),
 		func(req *http.Request) {
 			q := req.URL.Query()
@@ -350,7 +357,7 @@ func (f *File) postResumable(data []byte, offset int64, file_complete bool) erro
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNoContent {
+	if resp.StatusCode != expected_http_code {
 		return fmt.Errorf(
 			"status code %v writing file %v at %v: %w",
 			resp.StatusCode,
@@ -361,6 +368,16 @@ func (f *File) postResumable(data []byte, offset int64, file_complete bool) erro
 	}
 
 	return nil
+}
+
+func (f *File) postResumable(data []byte, offset int64, file_complete bool) error {
+	return f.upload("PUT", "/v2/files/%s/resumable/content",
+		http.StatusNoContent, data, offset, file_complete)
+}
+
+func (f *File) Append(data []byte) error {
+	return f.upload("POST", "/v2/files/%s/resumable",
+		http.StatusCreated, data, int64(f.Size), true)
 }
 
 func (f *File) FlushCache(file_complete bool) error {

@@ -53,6 +53,14 @@ func (mf *MCHFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse
 }
 
 func (mf *MCHFileHandle) Write(ctx context.Context, data []byte, off int64) (written uint32, errno syscall.Errno) {
+	if mf.node.flags&syscall.O_APPEND > 0 {
+		if err := mf.node.file.Append(data); err != nil {
+			return 0, syscall.EIO
+		}
+
+		return uint32(len(data)), fs.OK
+	}
+
 	if err := mf.node.file.Write(data, off); err != nil {
 		return 0, syscall.EIO
 	}
