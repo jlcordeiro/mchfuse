@@ -1,0 +1,12 @@
+* LookupDirectory is the wrong name, it searches for files (too?)
+* Copy small files that get there in 1 POST (and do not require a PUT)
+
+## Tested workflows:
+
+[*] rsync new file
+[*] cp new file
+[*] cat to existing file
+[*] cat to unexisting file
+[ ] cat overwrite to unexisting file
+[ ] rsync existing file
+[ ] cp existing file
